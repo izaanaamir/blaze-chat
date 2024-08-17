@@ -1,5 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks
-from app.api.endpoints import users, auth
+from app.api.endpoints import users, auth, messages
 from .database import Base, engine
 from .db_init import init_db
 import uvicorn
@@ -10,6 +10,7 @@ app = FastAPI()
 
 app.include_router(auth.router, tags=["authentication"])
 app.include_router(users.router, prefix="/users", tags=["users"])
+app.include_router(messages.router, prefix="/messages", tags=["messages"])
 
 
 @app.get("/")
