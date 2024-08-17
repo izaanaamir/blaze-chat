@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List
 from ... import crud, models, schemas
@@ -18,10 +18,14 @@ def create_conversation(
 
 @router.get("/conversations/", response_model=List[schemas.Conversation])
 def read_conversations(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return crud.get_user_conversations(db=db, user_id=current_user.id)
+    return crud.get_user_conversations(
+        db=db, user_id=current_user.id, skip=skip, limit=limit
+    )
 
 
 @router.post(
@@ -48,8 +52,8 @@ def create_message(
 )
 def read_conversation_messages(
     conversation_id: int,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

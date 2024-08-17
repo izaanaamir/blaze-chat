@@ -65,11 +65,15 @@ def create_conversation(
     return db_conversation
 
 
-def get_user_conversations(db: Session, user_id: int):
+def get_user_conversations(
+    db: Session, user_id: int, skip: int = 0, limit: int = 10
+):
     return (
         db.query(models.Conversation)
         .join(models.Participant)
         .filter(models.Participant.user_id == user_id)
+        .offset(skip)
+        .limit(limit)
         .all()
     )
 
@@ -90,11 +94,12 @@ def create_message(
 
 
 def get_conversation_messages(
-    db: Session, conversation_id: int, skip: int = 0, limit: int = 100
+    db: Session, conversation_id: int, skip: int = 0, limit: int = 20
 ):
     return (
         db.query(models.Message)
         .filter(models.Message.conversation_id == conversation_id)
+        .order_by(models.Message.created_at.desc())
         .offset(skip)
         .limit(limit)
         .all()
