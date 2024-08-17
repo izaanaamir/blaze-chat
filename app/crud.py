@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from . import models, schemas
 from .core.security import get_password_hash, verify_password
@@ -104,3 +105,42 @@ def get_conversation_messages(
         .limit(limit)
         .all()
     )
+
+
+def update_message(
+    db: Session, message_id: int, message: schemas.MessageUpdate, user_id: int
+):
+    db_message = (
+        db.query(models.Message)
+        .filter(models.Message.id == message_id)
+        .first()
+    )
+    if not db_message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if db_message.sender_id != user_id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to edit this message"
+        )
+
+    db_message.content = message.content
+    db.commit()
+    db.refresh(db_message)
+    return db_message
+
+
+def delete_message(db: Session, message_id: int, user_id: int):
+    db_message = (
+        db.query(models.Message)
+        .filter(models.Message.id == message_id)
+        .first()
+    )
+    if not db_message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if db_message.sender_id != user_id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to delete this message"
+        )
+
+    db.delete(db_message)
+    db.commit()
+    return {"message": "Message deleted successfully"}

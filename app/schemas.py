@@ -68,3 +68,7 @@ class Conversation(ConversationBase):
 
     class Config:
         from_attributes = True
+
+
+class MessageUpdate(BaseModel):
+    content: str

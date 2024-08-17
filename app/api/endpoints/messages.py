@@ -60,3 +60,26 @@ def read_conversation_messages(
     return crud.get_conversation_messages(
         db=db, conversation_id=conversation_id, skip=skip, limit=limit
     )
+
+
+@router.put("/messages/{message_id}", response_model=schemas.Message)
+def update_message(
+    message_id: int,
+    message: schemas.MessageUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.update_message(
+        db=db, message_id=message_id, message=message, user_id=current_user.id
+    )
+
+
+@router.delete("/messages/{message_id}", response_model=dict)
+def delete_message(
+    message_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.delete_message(
+        db=db, message_id=message_id, user_id=current_user.id
+    )
