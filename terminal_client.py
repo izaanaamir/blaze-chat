@@ -1,31 +1,14 @@
 import requests
-import threading
+import os
 import time
-from flask import Flask, request
-
-app = Flask(__name__)
 
 BASE_URL = "http://localhost:8000"
 TOKEN = ""
 CURRENT_USER = None
-CONVERSATION_ID = None
 
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    event = request.json["event"]
-    data = request.json["data"]
-    if event == "new_message" and data["sender_id"] != CURRENT_USER["id"]:
-        print(f"\n[New message] {data['sender_id']}: {data['content']}")
-    elif event == "message_read":
-        print(
-            f"\n[Read receipt] Message {data['id']} was read at {data['read_at']}"  # noqa
-        )
-    return "", 204
-
-
-def start_flask():
-    app.run(port=5000)
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 def get_token(username, password):
@@ -58,7 +41,7 @@ def create_conversation(participant_ids):
 
 def send_message(conversation_id, content):
     headers = {"Authorization": f"Bearer {TOKEN}"}
-    data = {"content": content, "message_type": "text"}
+    data = {"content": content}
     response = requests.post(
         f"{BASE_URL}/messages/conversations/{conversation_id}/messages/",
         headers=headers,
@@ -76,16 +59,18 @@ def get_messages(conversation_id):
     return response.json()
 
 
-def mark_message_read(message_id):
+def get_conversations():
     headers = {"Authorization": f"Bearer {TOKEN}"}
-    response = requests.post(
-        f"{BASE_URL}/messages/{message_id}/read", headers=headers
+    response = requests.get(
+        f"{BASE_URL}/messages/conversations/", headers=headers
     )
     return response.json()
 
 
 def login_or_create_user():
     global TOKEN, CURRENT_USER
+    clear_screen()
+    print("Welcome to the Messaging App!")
     choice = input(
         "Do you want to (1) Login or (2) Create a new user? Enter 1 or 2: "
     )
@@ -107,71 +92,124 @@ def login_or_create_user():
 
     CURRENT_USER = get_current_user()
     print(f"Logged in as {CURRENT_USER['username']}")
+    input("Press Enter to continue...")
 
 
-def start_or_join_conversation():
-    global CONVERSATION_ID
-    choice = input(
-        "Do you want to (1) Start a new conversation or (2) Join an existing one? Enter 1 or 2: "  # noqa
-    )
+def display_menu():
+    clear_screen()
+    print(f"Welcome, {CURRENT_USER['username']}!")
+    print("\n1. View Conversations")
+    print("2. Send a Message")
+    print("3. Logout")
+    print("4. Exit")
+    return input("Enter your choice (1-4): ")
 
-    if choice == "1":
-        participant_ids = input(
-            "Enter the IDs of participants (comma-separated, including your own ID): "  # noqa
+
+def view_conversations():
+    clear_screen()
+    conversations = get_conversations()
+    if not conversations:
+        print("You have no conversations yet.")
+        input("Press Enter to continue...")
+        return
+
+    print("Your Conversations:")
+    for idx, conv in enumerate(conversations, 1):
+        participants = ", ".join(
+            [
+                user["username"]
+                for user in conv["users"]
+                if user["id"] != CURRENT_USER["id"]
+            ]
         )
-        participant_ids = [
-            int(id.strip()) for id in participant_ids.split(",")
-        ]
-        conversation = create_conversation(participant_ids)
-        CONVERSATION_ID = conversation["id"]
-        print(f"Created conversation with ID: {CONVERSATION_ID}")
-    elif choice == "2":
-        CONVERSATION_ID = int(input("Enter the conversation ID: "))
-    else:
-        print("Invalid choice. Exiting.")
-        exit()
+        print(f"{idx}. Conversation with: {participants}")
 
-
-def chat_interface():
-    print(
-        "\nChat interface started. Type your message and press Enter to send."
+    choice = input(
+        "\nEnter the number of the conversation to view messages (or 0 to go back): "  # noqa
     )
-    print("Type 'quit' to exit the chat.")
+    if choice.isdigit() and 0 < int(choice) <= len(conversations):
+        view_messages(conversations[int(choice) - 1]["id"])
 
-    # Start a thread to periodically fetch and display new messages
-    def fetch_messages():
-        last_message_id = 0
-        while True:
-            messages = get_messages(CONVERSATION_ID)
-            for message in messages:
-                if message["id"] > last_message_id:
-                    if message["sender_id"] != CURRENT_USER["id"]:
-                        print(
-                            f"\n[New message] {message['sender_id']}: {message['content']}"  # noqa
-                        )
-                        mark_message_read(message["id"])
-                    last_message_id = message["id"]
-            time.sleep(2)  # Check for new messages every 2 seconds
 
-    fetch_thread = threading.Thread(target=fetch_messages)
-    fetch_thread.daemon = True
-    fetch_thread.start()
+def view_messages(conversation_id):
+    clear_screen()
+    messages = get_messages(conversation_id)
+    for message in messages:
+        sender = (
+            "You"
+            if message["sender_id"] == CURRENT_USER["id"]
+            else f"User {message['sender_id']}"
+        )
+        print(f"{sender}: {message['content']}")
+    input("\nPress Enter to go back...")
 
-    while True:
-        message = input("")
-        if message.lower() == "quit":
-            break
-        print(f"[Sent] You: {message}")
+
+def send_new_message():
+    clear_screen()
+    conversations = get_conversations()
+    if not conversations:
+        print("You have no conversations. Create a new one.")
+        participant_id = input(
+            "Enter the user ID of the person you want to chat with: "
+        )
+        conversation = create_conversation(
+            [CURRENT_USER["id"], int(participant_id)]
+        )
+        conversation_id = conversation["id"]
+    else:
+        print("Your Conversations:")
+        for idx, conv in enumerate(conversations, 1):
+            participants = ", ".join(
+                [
+                    user["username"]
+                    for user in conv["users"]
+                    if user["id"] != CURRENT_USER["id"]
+                ]
+            )
+            print(f"{idx}. Conversation with: {participants}")
+
+        choice = input(
+            "\nEnter the number of the conversation to send a message (or 0 for a new conversation): "  # noqa
+        )
+        if choice == "0":
+            participant_id = input(
+                "Enter the user ID of the person you want to chat with: "
+            )
+            conversation = create_conversation(
+                [CURRENT_USER["id"], int(participant_id)]
+            )
+            conversation_id = conversation["id"]
+        elif choice.isdigit() and 0 < int(choice) <= len(conversations):
+            conversation_id = conversations[int(choice) - 1]["id"]
+        else:
+            print("Invalid choice.")
+            input("Press Enter to continue...")
+            return
+
+    content = input("Enter your message: ")
+    send_message(conversation_id, content)
+    print("Message sent successfully!")
+    input("Press Enter to continue...")
 
 
 def main():
     login_or_create_user()
-    start_or_join_conversation()
-    chat_interface()
+    while True:
+        choice = display_menu()
+        if choice == "1":
+            view_conversations()
+        elif choice == "2":
+            send_new_message()
+        elif choice == "3":
+            print("Logging out...")
+            login_or_create_user()
+        elif choice == "4":
+            print("Thank you for using the Messaging App. Goodbye!")
+            break
+        else:
+            print("Invalid choice. Please try again.")
+            time.sleep(2)
 
 
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=start_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
     main()
